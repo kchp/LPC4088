@@ -6,16 +6,15 @@
 #include "semphr.h"
 #include "can.h"
 
-xQueueHandle tx_queue;		//	Declare queuehandler for transmitting
-xQueueHandle rx_queue;		//	Declare queuehandler for receiving
+xQueueHandle tx_queue;			//	Declare queuehandler for transmitting
+xQueueHandle rx_queue;			//	Declare queuehandler for receiving
 xSemaphoreHandle binary_sem;	//	Declare gatekeeper
-
-long task_woken = 0;
 
 /**
  * GPIO Interrupt handler/ISR
  */
 void GPIO_IRQ_HANDLER(void){
+	long task_woken = 0;
 	Chip_GPIOINT_ClearIntStatus(LPC_GPIOINT, 2, 1 << 10);
 	xSemaphoreGiveFromISR(binary_sem, &task_woken);
 }
@@ -25,6 +24,7 @@ void GPIO_IRQ_HANDLER(void){
  */
 void CAN_IRQHandler(void)
 {
+	long task_woken = 0;
 	uint32_t IntStatus;
 	CAN_MSG_T RcvMsgBuf;
 	IntStatus = Chip_CAN_GetIntStatus(LPC_CAN);
@@ -56,7 +56,7 @@ static void TX_task(void *pvParameters) {
 		if(xSemaphoreTake(binary_sem, 9999999)){
 			printf("Button was pressed!\n");
 			long ok = xQueueSend(tx_queue, &test, 500);
-			puts(ok ? "OK" : "FAILED");
+			puts(ok ? "OK" : "Queue is full!");
 		}
 	}
 }
@@ -89,7 +89,7 @@ static void can_task(void *pvParameters){
 
 	while(1)
 	{
-		if(xQueueReceive(rx_queue, &test, 500))
+		if(xQueueReceive(tx_queue, &test, 500))
 		{
 			DEBUGOUT("Message Sent!!!\r\n");
 			PrintCANMsg(&test);
@@ -102,7 +102,6 @@ static void can_task(void *pvParameters){
 static char WelcomeMenu[] = "\n\rHello NXP Semiconductors \r\n"
 							"CAN DEMO : Use CAN to transmit and receive Message from CAN Analyzer\r\n"
 							"CAN bit rate : 125kBit/s\r\n";
-
 /**
  * @name main
  * @return
